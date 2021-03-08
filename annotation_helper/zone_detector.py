@@ -1,12 +1,12 @@
 import cv2
 import os
-import utils
+import annotation_helper.utils
 import pandas as pd
 
 
 def detect_zones(args):
 
-    """Automatically detects regions of interest for every image in `IMG_DATA_DIR, using a simple dilation process.
+    """Automatically detects regions of interest for every image in `IMG_DIR, using a simple dilation process.
     Returns a `'key':[values]`-like dictionnary containing all the generated rectangles for all the images"""
 
     csv_dict = {"filename": [],
@@ -17,11 +17,11 @@ def detect_zones(args):
                 "region_shape_attributes": [],
                 "region_attributes": []}
 
-    for filename in os.listdir(args.IMG_DATA_DIR):
+    for filename in os.listdir(args.IMG_DIR):
         if filename[-3:] in ["png", "jpg", "tif", "jp2"]:
 
             # Preparing image
-            image = cv2.imread(os.path.join(args.IMG_DATA_DIR, filename))
+            image = cv2.imread(os.path.join(args.IMG_DIR, filename))
             copy = image.copy()
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             blur = cv2.GaussianBlur(src=gray, ksize=(31, 31), sigmaX=0)
@@ -33,22 +33,22 @@ def detect_zones(args):
 
             # Finding contours
             contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            contours = utils.remove_artifacts(image, contours, args.artifacts_size_threshold)
+            contours = annotation_helper.utils.remove_artifacts(image, contours, args.artifacts_size_threshold)
 
             # Finding dilation contours
             dilation_contours, dilation_hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            dilation_contours = utils.remove_artifacts(image, dilation_contours, args.artifacts_size_threshold)
+            dilation_contours = annotation_helper.utils.remove_artifacts(image, dilation_contours, args.artifacts_size_threshold)
 
             # Get boundings rects of contours
-            contours_rectangles = utils.get_bounding_rectangles(contours)
-            dilation_contours_rectangles = utils.get_bounding_rectangles(dilation_contours)
+            contours_rectangles = annotation_helper.utils.get_bounding_rectangles(contours)
+            dilation_contours_rectangles = annotation_helper.utils.get_bounding_rectangles(dilation_contours)
 
-            dilation_contours_rectangles_shrinked = utils.shrink_dilation_contours_rectangles(dilation_contours_rectangles,
-                                                                                              contours_rectangles)
+            dilation_contours_rectangles_shrinked = annotation_helper.utils.shrink_dilation_contours_rectangles(dilation_contours_rectangles,
+                                                                                                   contours_rectangles)
 
             for i, rectangle in enumerate(dilation_contours_rectangles_shrinked):
                 csv_dict["filename"].append(filename)
-                csv_dict["file_size"].append(os.stat(os.path.join(args.IMG_DATA_DIR, filename)).st_size)
+                csv_dict["file_size"].append(os.stat(os.path.join(args.IMG_DIR, filename)).st_size)
                 csv_dict["file_attributes"].append("{}")
                 csv_dict["region_count"].append(len(dilation_contours_rectangles_shrinked))
                 csv_dict["region_id"].append(i)
@@ -71,7 +71,7 @@ def detect_zones(args):
 
                 cv2.imwrite(os.path.join(args.OUTPUT_DIR, filename), copy)
 
-    utils.write_csv_manually("detected_annotations.csv", csv_dict, args)
+    annotation_helper.utils.write_csv_manually("detected_annotations.csv", csv_dict, args)
 
     print("{} zones were automatically detected".format(len(csv_dict["filename"])))
 
@@ -114,7 +114,7 @@ def merge_lace_and_detected_zones(detected_zones, lace_zones, args):
 
     csv_dict = dfl.to_dict(orient='list')
 
-    utils.write_csv_manually("all_annotations.csv", csv_dict, args)
+    annotation_helper.utils.write_csv_manually("all_annotations.csv", csv_dict, args)
 
     print("{} automatically detected zones were added to lace annotations".format(added_rectangles))
 

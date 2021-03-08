@@ -4,6 +4,7 @@ import os
 import csv
 
 
+# TODO : maybe add to  oclr_utils
 def remove_artifacts(image, contours, artifacts_size_threshold):
     """Removes contours if the sum of their height and width is inferior to the user-selected threshold"""
     contours_denoised = []
@@ -14,6 +15,7 @@ def remove_artifacts(image, contours, artifacts_size_threshold):
     return contours_denoised
 
 
+# TODO : maybe add to  oclr_utils
 def find_contour_centroid(contour):
     """Finds the centroid of a contour to perform clustering algorithm"""
     moments = cv2.moments(contour)
@@ -23,6 +25,7 @@ def find_contour_centroid(contour):
     return centroid
 
 
+# TODO : maybe add to  oclr_utils
 def get_bounding_rectangles(contours):
     contours_rectangles = []
     for i, contour in enumerate(contours):  # TODO : remove
@@ -88,5 +91,5 @@ def write_csv_manually(csv_filename, csv_dict, args):
             spamwriter.writerow(to_append)
 
     correct_csv_manually(csv_filename, args)
-    os.remove(csv_filename+"a")
+    os.remove(csv_filename + "a")
     os.chdir(pwd)

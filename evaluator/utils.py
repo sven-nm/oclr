@@ -1,67 +1,55 @@
-def get_id(segment):
-    """ Retrieves id from a lace or an ocrd segment. Input :  a segment. Returns : id as str"""
-    try:
-        id = segment.getAttribute("id")
-    except TypeError:
-        id = segment["id"]
-    return id
+from bs4 import BeautifulSoup
+
+divisor = 4
 
 
-# todo change all coords in new format
-def get_coords(segment):
-    """ Retrieves coords from a lace or an ocrd segment. Input :  a segment. Returns : coors as a list of [x,y]-coords-lists,
-    with the following order for rectangles : upper left, upper right, down right, down left """
+def initialize_soup(image):
+    """Initializes a blank html page for comparisons"""
 
-    try:  # try for an ocrd-segment
-        coords = segment.getElementsByTagName("pc:Coords")[0].getAttribute("points").split()
-        coords = [(int(coord.split(",")[0]), int(coord.split(",")[1])) for coord in coords]
+    soup = BeautifulSoup("""<!doctype html>
+                         <html lang="en">
+                         <head><meta charset="utf-8"><title>{}</title></head>
+                         <body><p style="margin:auto;text-align:center"> 
+                         <b>OCR/GROUNDTRUTH COMPARISON </b><br> 
+                         Ocr is displayed on the left, groundtruth on the right.<br>
+                         Missrecognized words are contoured in red. </p>
+                         </body></html>""".format(image.filename), features="lxml")
 
-    except TypeError:  # exception raised if lace segment
-        coords = segment["title"].split()
-        coords = [(int(coords[1]), int(coords[2])), (int(coords[3], int(coords[2]))),
-                  (int(coords[3]), int(coords[4])), (int(coords[1]), int(coords[4]))]
+    to_append = soup.new_tag(name="div",
+                             attrs={"half_width": image.width / divisor,
+                                    "style": "margin:auto;"
+                                             "position:relative;"
+                                             "width:{}px; "
+                                             "height:{}px".format(image.width * 2 / divisor,
+                                                                  image.height / divisor)})
 
-    return coords
+    soup.html.body.append(to_append)
 
-def get_type(segment):
-    try:
-        type_ = segment.getElementsByTagName("pc:Coords")[0].getAttribute("class")
-    except TypeError:
-        type_ = segment["class"]
-
-# TODO CONtinuer ici
-# TODO add file 146 TO OCR FROM TRASH
-
+    return soup
 
 
+def insert_text(soup, word, gt, distance):
+    """Draws text and rectangles on html"""
 
-def compute_levenshtein(s1, s2):
-    if len(s1) > len(s2):
-        s1, s2 = s2, s1
+    x_coord = word.coords[3][0]/divisor+soup.html.body.div["half_width"] if gt else word.coords[3][0]/divisor
 
-    distances = range(len(s1) + 1)
-    for i2, c2 in enumerate(s2):
-        distances_ = [i2+1]
-        for i1, c1 in enumerate(s1):
-            if c1 == c2:
-                distances_.append(distances[i1])
-            else:
-                distances_.append(1 + min((distances[i1], distances[i1 + 1], distances_[-1])))
-        distances = distances_
-    return distances[-1]
+    border = "1px solid red" if distance > 0 else "0px"
+
+    to_append = soup.new_tag(name="div",
+                             attrs={"style": "position:absolute;"
+                                             "width:{}px;"
+                                             "height:{}px;"
+                                             "left:{}px;"
+                                             "top:{}px;"
+                                             "border:{}".format(word.width / divisor,
+                                                                word.height / divisor,
+                                                                x_coord,
+                                                                word.coords[3][1] / divisor,
+                                                                border)})
 
 
+    to_append.string = word.content
 
-#%%
+    soup.html.body.div.append(to_append)
 
-coords = "12,13 13,13 14,14".split()
-
-for a,b in coords[0].split(","):
-    print(a,b)
-
-[(int(coord.split(",")[0]), int(coord.split(",")[1])) for coord in coords]
-
-a,b = coords[0].split(",")
-[coord.split(",") for coord in coords]
-
-coords = [(int(a),int(b)) for coord in coords for a,b in coord.split(",")]
+    return soup
