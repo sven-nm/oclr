@@ -1,9 +1,10 @@
 import cv2
 from xml.dom import minidom
 import os
-import utils
+from annotation_helper import utils
 
 
+# TODO : Actualize this with oclr_utils classes
 def convert_svg(args):
     """Convert svg-files from lace into VIA2 readable csv-files.
     Returns a `'key':[values]`-like dictionnary containing all the imported rectangles for all the images"""
@@ -16,9 +17,9 @@ def convert_svg(args):
                 "region_shape_attributes": [],
                 "region_attributes": []}
 
-    for svg_file in os.listdir(args.SVG_DATA_DIR):
+    for svg_file in os.listdir(args.SVG_DIR):
 
-        svg = minidom.parse(os.path.join(args.SVG_DATA_DIR, svg_file))
+        svg = minidom.parse(os.path.join(args.SVG_DIR, svg_file))
 
         # Retrieve relevant rectangles
         rectangles = [r for r in svg.getElementsByTagName('rect') if r.getAttribute("data-rectangle-type") in
@@ -27,8 +28,8 @@ def convert_svg(args):
         # Retrieve image and file-name
         linked_image = svg.getElementsByTagName("image")[0]
         linked_image_name = os.path.basename(linked_image.getAttribute("xlink:href"))
-        linked_image_height = cv2.imread(os.path.join(args.IMG_DATA_DIR, linked_image_name)).shape[0]
-        linked_image_width = cv2.imread(os.path.join(args.IMG_DATA_DIR, linked_image_name)).shape[1]
+        linked_image_height = cv2.imread(os.path.join(args.IMG_DIR, linked_image_name)).shape[0]
+        linked_image_width = cv2.imread(os.path.join(args.IMG_DIR, linked_image_name)).shape[1]
 
         # Retrieve svg viewports dimensions
         svg_height = float(svg.getElementsByTagName("svg")[0].getAttribute("height"))
@@ -38,7 +39,7 @@ def convert_svg(args):
         for rectangle in rectangles:
             csv_dict["filename"].append(os.path.basename(linked_image_name))
             csv_dict["file_size"].append(os.stat(
-                os.path.join(args.IMG_DATA_DIR,
+                os.path.join(args.IMG_DIR,
                              linked_image_name)).st_size)
             csv_dict["file_attributes"].append({})
             csv_dict["region_count"].append(len(rectangles))

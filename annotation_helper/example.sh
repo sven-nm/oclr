@@ -1,5 +1,5 @@
-python3 annotation_helper --IMG_DATA_DIR "data/test_png" \
---SVG_DATA_DIR "data/test_svg" \
+python3 annotation_helper --IMG_DIR "data/test_png" \
+--SVG_DIR "data/test_svg" \
 --OUTPUT_DIR "output" \
 --dilation_kernel_size 51 \
 --dilation_iterations 1 \
