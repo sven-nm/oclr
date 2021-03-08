@@ -1,0 +1,17 @@
+# OSX
+**/.DS_Store
+.DS_Store
+*.swp
+*~.nib
+# Thumbnails
+._*
+
+# Pycharm
+.idea/
+annotation_helper/data/test_*/
+annotation_helper/output/
+evaluator/data/
+evaluator/outputs/
+output/
+
+
