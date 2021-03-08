@@ -4,13 +4,15 @@ import os
 import numpy as np
 import Levenshtein
 import sys
-
 sys.path.append(os.getcwd())
 from oclr_utils import file_management
 from oclr_utils.cli import args
 import evaluator.utils
-import cv2
+import logging
 
+logging.basicConfig(level=logging.INFO)
+# TODO : Update Logging
+# TODO : Update html overlapping
 # TODO : Create dinglehopper like comparison files
 # TODO : Warning, this loop only works if the files are named in a same way.
 # TODO : handle words that are in ocr but not in gt
@@ -28,6 +30,8 @@ error_traceback = []
 for image_filename in os.listdir(args.IMG_DIR):
 
     if image_filename[-3:] in ["png", "jpg", "tif", "jp2"]:
+
+        logging.info("Processing image "+image_filename)
 
         # Import files (FOR LACE)
         image = file_management.Image(args, image_filename)

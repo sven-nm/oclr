@@ -2,6 +2,7 @@ import cv2
 import os
 import annotation_helper.utils
 import pandas as pd
+import logging
 
 
 def detect_zones(args):
@@ -19,6 +20,7 @@ def detect_zones(args):
 
     for filename in os.listdir(args.IMG_DIR):
         if filename[-3:] in ["png", "jpg", "tif", "jp2"]:
+            logging.info("Processing image "+filename)
 
             # Preparing image
             image = cv2.imread(os.path.join(args.IMG_DIR, filename))
