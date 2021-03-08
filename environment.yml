@@ -68,6 +68,7 @@ dependencies:
   - zstd=1.4.8=hf387650_1
   - pip:
     - beautifulsoup4==4.9.3
+    - lxml==4.6.2
     - pandas==1.2.3
     - python-dateutil==2.8.1
     - python-levenshtein==0.12.2
