@@ -31,17 +31,17 @@ args.ocr_engine = "ocrd" if args.OCR_DIR.find("OCR-D") >= 0 else "lace"
 
 
 # Loop over all image-files
-for image_filename in os.listdir(args.IMG_DIR):
+for gt_filename in os.listdir(args.GROUNDTRUTH_DIR):
 
-    if image_filename[-3:] in ["png", "jpg", "tif", "jp2"]:
+    if gt_filename[-5:] == ".html":
 
-        print("Processing image " + image_filename)
+        print("Processing image " + gt_filename)
 
         # Import files (FOR LACE)
-        image = file_management.Image(args, image_filename)
-        svg = file_management.ZonesMasks(args, image_filename[0:-3] + "svg")
-        groundtruth = file_management.OcrObject(args, image_filename, data_type="groundtruth")
-        ocr = file_management.OcrObject(args, image_filename, data_type="ocr")
+        image = file_management.Image(args, gt_filename)
+        svg = file_management.ZonesMasks(args, gt_filename[0:-3] + "svg")
+        groundtruth = file_management.OcrObject(args, gt_filename, data_type="groundtruth")
+        ocr = file_management.OcrObject(args, gt_filename, data_type="ocr")
 
         # Initialize html output
         soup = evaluator.utils.initialize_soup(image)
