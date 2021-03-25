@@ -11,12 +11,10 @@ class Registrable:
     """In case of later integration with dhSegment"""
     pass
 
+
 class File(Registrable):
     def __init__(self, filename):
         self.filename = filename
-
-class Test(File):
-    pass
 
 
 class Image(File):
@@ -34,6 +32,7 @@ class ZonesMasks(File):
     #TODO upgrade this to read VIA annotation. Build alternative constructors from_svg & from_VIA
 
     def __init__(self, args, filename):
+        super(ZonesMasks, self).__init__(filename)
         self.svg = minidom.parse(os.path.join(args.SVG_DIR, filename))
 
         # Retrieve image and file-name
@@ -49,18 +48,37 @@ class ZonesMasks(File):
                  ["commentary", "page_number", "primary_text", "title", "app_crit", "translation"]]
 
 
-class LaceOcr(File):
+class OcrObject(File):
 
-    def __init__(self, args, filename, data_type): #TODO : maybe find a better way
+    def __init__(self, args, image_filename, data_type):
 
+        # TODO this should be an extracter
         if data_type == "groundtruth":
-            self.file = codecs.open(os.path.join(args.GROUNDTRUTH_DIR, filename), 'r')
-        elif data_type == "ocr":
-            self.file = codecs.open(os.path.join(args.OCR_DIR, filename), 'r')
+            self.filename = image_filename[0:-3] + "html"
+            self.file = codecs.open(os.path.join(args.GROUNDTRUTH_DIR, self.filename), 'r')
+            self.source = BeautifulSoup(self.file.read(), "html.parser")
+            self.lines = self.source.find_all("html:span", attrs={"class": "ocr_line"})
+            self.words = self.source.find_all("html:span", attrs={"class": "ocr_word"})
 
-        self.source = BeautifulSoup(self.file.read(), "html.parser")
-        self.lines = self.source.find_all("html:span", attrs={"class": "ocr_line"}) # TODO here make it from class segment
-        self.words = self.source.find_all("html:span", attrs={"class": "ocr_word"})
+        else:
+            if args.ocr_engine == "lace":
+                self.filename = image_filename[0:-3]+"html"
+                self.file = codecs.open(os.path.join(args.OCR_DIR, self.filename), 'r')
+                self.source = BeautifulSoup(self.file.read(), "html.parser")
+                self.lines = self.source.find_all("html:span", attrs={"class": "ocr_line"})
+                self.words = self.source.find_all("html:span", attrs={"class": "ocr_word"})
+
+            else:
+                # Find the corresponding file :
+                for filename_ in os.listdir(args.OCR_DIR):
+                    if filename_.endswith(image_filename[0:-3]+"xml"):
+                        self.filename = filename_
+
+                self.source = minidom.parse(os.path.join(args.OCR_DIR, self.filename))
+                self.lines = self.source.getElementsByTagName("pc:TextLine")
+                self.words = self.source.getElementsByTagName("pc:Word")
+
+
 
 
 class Segment(Registrable):
@@ -99,12 +117,12 @@ class Segment(Registrable):
 
 
     @classmethod
-    def from_ocr(cls, segment):
+    def from_ocr(cls, args, segment, data_type):
         """This constructor uses the functions from utils which accept both Lace and OCR-D."""
-        id = extracters.get_id(segment)
-        coords = extracters.get_coords(segment)
-        type_ = extracters.get_type(segment)
-        content = extracters.get_content(segment)
+        id = extracters.get_id(args, segment, data_type)
+        coords = extracters.get_coords(args, segment, data_type)
+        type_ = extracters.get_type(args, segment, data_type)
+        content = extracters.get_content(args, segment, data_type)
 
         return cls(id, coords, type_, content, segment)
 

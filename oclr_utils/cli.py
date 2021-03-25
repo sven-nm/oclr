@@ -99,9 +99,9 @@ else:
     parser = evaluator_args(annotation_helper_args(general_args(parser)))
     args = parser.parse_args(["--IMG_DIR", "/Users/sven/oclr/evaluator/data/images",
                               "--SVG_DIR", "/Users/sven/oclr/evaluator/data/svg",
-                              "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs",
+                              "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs/ocrd_jebb_eval",
                               "--GROUNDTRUTH_DIR", "/Users/sven/oclr/evaluator/data/groundtruth",
-                              "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/lace_ocr",
+                              "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/ocrd_ocr/OCR-D-OCR_word",
                               "--dilation_kernel_size", "51",
                               "--dilation_iterations", "1",
                               "--artifacts_size_threshold", "0.01",

@@ -3,24 +3,26 @@
 # -----------------------------------------------------------
 
 
-def get_id(segment):
+def get_id(args, segment, data_type):
     """ Retrieves id from a lace or an ocrd segment. Input :  a segment. Returns : id as str"""
-    try:
+    if args.ocr_engine == "ocrd" and data_type == "ocr":
         id = segment.getAttribute("id")
-    except TypeError:
+    else:
         id = segment["id"]
     return id
 
 
-def get_coords(segment):
-    """ Retrieves coords from a lace or an ocrd segment. Input :  a segment. Returns : coords as a list of [x,y]-coords-lists,
-    with the following order for rectangles : upper left, upper right, down right, down left """
+def get_coords(args, segment, data_type):
+    """ Retrieves coords from a lace or an ocrd segment.
+        Input :  a segment.
+        Returns : coords as a list of (x,y)-coords-tuples,
+        with the following order for rectangles : upper left, upper right, down right, down left """
 
-    try:  # try for an ocrd-segment
+    if args.ocr_engine == "ocrd" and data_type == "ocr":
         coords = segment.getElementsByTagName("pc:Coords")[0].getAttribute("points").split()
         coords = [(int(coord.split(",")[0]), int(coord.split(",")[1])) for coord in coords]
 
-    except TypeError:  # exception raised if lace segment
+    else :  # exception raised if lace segment
         coords = segment["title"].split()
         coords = [(int(coords[1]), int(coords[2])), (int(coords[3]), int(coords[2])),
                   (int(coords[3]), int(coords[4])), (int(coords[1]), int(coords[4]))]
@@ -37,21 +39,24 @@ def get_coords(segment):
     return coords
 
 
-def get_type(segment):
-    try:
+def get_type(args, segment, data_type):
+    if args.ocr_engine == "ocrd" and data_type == "ocr":
         type_ = segment.getElementsByTagName("pc:Coords")[0].getAttribute("class")
-    except TypeError:
+    else:
         type_ = segment["class"]
 
-# TODO CONtinuer ici
 
 
-# TODO this only works for lace, add ocrd
-def get_content(segment):
+
+def get_content(args, segment, data_type):
     """Retrieves the content of a segment"""
-    try:
-        content = segment.contents[0]
-    except IndexError:
-        content = ''
+    if args.ocr_engine == "ocrd" and data_type == "ocr":
+        content = segment.getElementsByTagName("pc:TextEquiv")[0].getElementsByTagName("pc:Unicode")[
+            0].firstChild.nodeValue
+    else:
+        try:
+            content = segment.contents[0]
+        except IndexError:
+            content = ""
 
     return content
