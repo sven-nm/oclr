@@ -11,14 +11,14 @@
 
 # Others
 output/
-annotation_helper/data/
+annotation_helper/data/test_*
 annotation_helper/output/
 
 evaluator/data/
 evaluator/outputs/
+evaluator/lace_boxes_drawer.py
 evaluator/ocrd_boxes_drawer.py
 evaluator/ocrd_implementation.py
-evaluator/lace_boxes_drawer.py
 evaluator/ocrd_implementation.py.py
 
 
