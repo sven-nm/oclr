@@ -20,10 +20,10 @@ Please install `olcr` from source, using `git clone https://github.com/sven-nm/o
 
 # Run
 
-In order to run `oclr` properly, you first need to create an environment. `environment.yml` 
-specifies requirements for [creating a conda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). 
+In order to run `oclr` properly, you first need to create an environment. `requirements.txt` 
+specifies the pip-requirements for creating an environment (for instance with [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). 
 
-Once the environment is created, go to the annotation_helper directory : `cd annotation_helper`.
+Once the virtual environment is created, go to the annotation_helper directory : `cd oclr`.
 
 Activate your environment : `conda activate myenv`. 
 
@@ -103,4 +103,16 @@ optional arguments:
                         files are stored
   --OCR_DIR OCR_DIR     Absolute path to the directory in which ocr-files are
                         stored
+```
+
+For example : 
+```
+python evaluator --IMG_DIR "data/test_png" \
+--SVG_DIR "data/test_svg" \
+--OUTPUT_DIR "output" \
+--dilation_kernel_size 51 \
+--dilation_iterations 1 \
+--artifacts_size_threshold 0.01 \
+--draw_rectangles \
+--merge_zones
 ```

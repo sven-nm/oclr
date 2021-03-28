@@ -4,8 +4,13 @@ import sys
 parser = argparse.ArgumentParser()
 
 
-def general_args(parser):
-    """Define general cli arguments"""
+def general_args(parser: "ArgumentParser") -> "ArgumentParser":
+    """Adds general cli arguments to the parser.
+
+    :param parser: an argparse parser
+    :return: augmented argparse parser.
+    """
+
 
     parser.add_argument(
         "--IMG_DIR",
@@ -31,8 +36,12 @@ def general_args(parser):
     return parser
 
 
-def evaluator_args(parser):
-    """Defines evaluator-specific cli arguments"""
+def evaluator_args(parser: "ArgumentParser") -> "ArgumentParser":
+    """Adds evaluator-specific cli arguments to the parser.
+
+    :param parser: argparse parser
+    :return: augmented argparse parser.
+    """
 
     parser.add_argument(
         "--GROUNDTRUTH_DIR",
@@ -51,8 +60,12 @@ def evaluator_args(parser):
     return parser
 
 
-def annotation_helper_args(parser):
-    """Defines annotation_helper-specific arguments"""
+def annotation_helper_args(parser: "ArgumentParser") -> "ArgumentParser":
+    """Adds annotation_helper-specific cli arguments to the parser.
+
+    :param parser: argparse parser
+    :return: augmented argparse parser.
+    """
 
     parser.add_argument(
         "--dilation_kernel_size",
@@ -97,11 +110,38 @@ elif sys.argv[0] == "annotation_helper":
 # For local testing
 else:
     parser = evaluator_args(annotation_helper_args(general_args(parser)))
-    args = parser.parse_args(["--IMG_DIR", "/Users/sven/oclr/evaluator/data/images",
-                              "--SVG_DIR", "/Users/sven/oclr/evaluator/data/svg",
-                              "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs/ocrd_jebb_eval",
-                              "--GROUNDTRUTH_DIR", "/Users/sven/oclr/evaluator/data/groundtruth",
-                              "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/ocrd_ocr/OCR-D-OCR_word",
+    # For local repo/lace
+    # args = parser.parse_args(["--IMG_DIR", "/Users/sven/oclr/evaluator/data/images",
+    #                           "--SVG_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth/svg",
+    #                           "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs/lace_jebb_eval",
+    #                           "--GROUNDTRUTH_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth",
+    #                           "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/lace_ocr",
+    #                           "--dilation_kernel_size", "51",
+    #                           "--dilation_iterations", "1",
+    #                           "--artifacts_size_threshold", "0.01",
+    #                           "--draw_rectangles",
+    #                           "--merge_zones"
+    #                           ])
+
+    # # For local repo/ocrd
+    # args = parser.parse_args(["--IMG_DIR", "/Users/sven/oclr/evaluator/data/images",
+    #                           "--SVG_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth/svg",
+    #                           "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs/ocrd_jebb_eval",
+    #                           "--GROUNDTRUTH_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth",
+    #                           "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/ocrd_ocr/OCR-D-OCR_word",
+    #                           "--dilation_kernel_size", "51",
+    #                           "--dilation_iterations", "1",
+    #                           "--artifacts_size_threshold", "0.01",
+    #                           "--draw_rectangles",
+    #                           "--merge_zones"
+    #                           ])
+
+    # For other repo
+    args = parser.parse_args(["--IMG_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/images/bsb10234118-images",
+                              "--SVG_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/evaluation/groundtruth/svg",
+                              "--OUTPUT_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/evaluation/output/ocrd",
+                              "--GROUNDTRUTH_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/evaluation/groundtruth",
+                              "--OCR_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/ocrd/OCR-D-OCR",
                               "--dilation_kernel_size", "51",
                               "--dilation_iterations", "1",
                               "--artifacts_size_threshold", "0.01",

@@ -8,10 +8,17 @@
 
 # Pycharm
 .idea/
-annotation_helper/data/test_*/
+
+# Others
+output/
+annotation_helper/data/
 annotation_helper/output/
+
 evaluator/data/
 evaluator/outputs/
-output/
+evaluator/ocrd_boxes_drawer.py
+evaluator/ocrd_implementation.py
+evaluator/lace_boxes_drawer.py
+evaluator/ocrd_implementation.py.py
 
 

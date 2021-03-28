@@ -2,7 +2,8 @@ import os
 import codecs
 import cv2
 from bs4 import BeautifulSoup
-from xml.dom import minidom
+# from xml.dom import minidom
+import numpy as np
 
 
 #%%

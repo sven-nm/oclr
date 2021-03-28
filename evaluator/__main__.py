@@ -1,18 +1,16 @@
 import csv
 import os
-import numpy as np
 import Levenshtein
 import sys
 sys.path.append(os.getcwd())
-from oclr_utils import file_management
+from oclr_utils import file_management, extracters
 from oclr_utils.cli import args
 import evaluator.utils
+import cv2
 
 
 # TODO : Update Logging
 # TODO : Update html overlapping
-# TODO : Create dinglehopper like comparison files
-# TODO : Warning, this loop only works if the files are named in a same way.
 # TODO : handle words that are in ocr but not in gt
 # TODO : add safe check
 # TODO : manage box sizes for ocrd
@@ -20,133 +18,74 @@ import evaluator.utils
 # TODO : see if overlap can be to another word
 # TODO : all correction as a safety check
 
-# Warning : This is assuming no words are overlapping in a single ocr !
-
-# Declarations
-analyzed_zonetypes = ["global", "commentary", "primary_text", "translation", "app_crit", "page_number", "title", "no_zone"]
+# Pre-loop declarations
+analyzed_zonetypes = ["global", "commentary", "primary_text", "translation", "app_crit", "page_number", "title",
+                      "no_zone"]
 error_counts = {i: {j: 0 for j in ["chars", "distance", "words", "false_words"]} for i in analyzed_zonetypes}
-error_traceback = []
+editops_record = []
 args.ocr_engine = "ocrd" if args.OCR_DIR.find("OCR-D") >= 0 else "lace"
 
-
-
-# Loop over all image-files
-for gt_filename in os.listdir(args.GROUNDTRUTH_DIR):
+for gt_filename in os.listdir(args.GROUNDTRUTH_DIR):  # GT-files LOOP
 
     if gt_filename[-5:] == ".html":
-
         print("Processing image " + gt_filename)
+        gt_filename = gt_filename[:-5]  # Removes the extension
 
-        # Import files (FOR LACE)
+        # Import files
         image = file_management.Image(args, gt_filename)
-        svg = file_management.ZonesMasks(args, gt_filename[0:-3] + "svg")
-        groundtruth = file_management.OcrObject(args, gt_filename, data_type="groundtruth")
-        ocr = file_management.OcrObject(args, gt_filename, data_type="ocr")
+        svg = file_management.ZonesMasks(args, gt_filename, image.image_format)
+        groundtruth = file_management.OcrObject(args, image, gt_filename, data_type="groundtruth")
+        ocr = file_management.OcrObject(args, image, gt_filename, data_type="ocr")
 
-        # Initialize html output
-        soup = evaluator.utils.initialize_soup(image)
+        soup = evaluator.utils.initialize_soup(image)  # Initialize html output
+        image.overlap_matrix = evaluator.utils.actualize_overlap_matrix(args, image, svg, groundtruth, ocr)
 
-        # Creates a blank image matrix that we will use later
-        image_matrix = np.ndarray((3, image.height, image.width), dtype=object)
-        image_matrix[:, :, :] = ''
-
-        # TODO : change this if ocr is not regionized
-        # For each zone, fill matrix and add error dictionary
-        for zone in svg.zones:
-            zone = file_management.Segment.from_lace_svg(zone, image, svg)
-            image_matrix[0, zone.coords[0][1]:zone.coords[2][1],zone.coords[0][0]:zone.coords[2][0]] = zone.type  # adds zone.type to matrix, eg. "primary_text"
-
-        # For each word in ocr, fill matrix
-        for word in ocr.words:
-            word = file_management.Segment.from_ocr(args, word, "ocr")
-            image_matrix[2, word.coords[0][1]:word.coords[2][1], word.coords[0][0]:word.coords[2][0]] = word.id
-
-        # For each gt_word in gt, fill matrix, then find overlapping gt- and ocr-words
         for gt_word in groundtruth.words:
-            gt_word = file_management.Segment.from_ocr(args, gt_word, "groundtruth")
-            image_matrix[1, gt_word.coords[0][1]:gt_word.coords[2][1],gt_word.coords[0][0]:gt_word.coords[2][0]] = gt_word.id
 
-            array = image_matrix[0, gt_word.coords[0][1]:gt_word.coords[2][1],gt_word.coords[0][0]:gt_word.coords[2][0]]
+            gt_word.zone_type = extracters.get_segment_zonetype(gt_word, image.overlap_matrix)
+            ocr_word = extracters.get_corresponding_ocr_word(args, gt_word, ocr, image.overlap_matrix)
 
-            # TODO : encore un code de cochon monsieur NM
-            word_zone = None
-            for e in set(array.flatten()):
-                if e != '':
-                    word_zone = e
-            if word_zone is None:
-                word_zone = "no_zone"
-
-            # easy solution : get the most present element in ocr matrix for given gt coordinates
-            overlap_scores = {}
-            array = image_matrix[2, gt_word.coords[0][1]:gt_word.coords[2][1],gt_word.coords[0][0]:gt_word.coords[2][0]]
-
-            for id in set(array.flatten()):
-                overlap_scores[id] = len(array[array == id])
-
-            # LIPSTICK ON A MUDDY PIG TO GET THE VALUE THAT HAS THE MAX SCORE # TODO change this horror
-            good_id = list(overlap_scores.keys())[list(overlap_scores.values()).index(max(overlap_scores.values()))]
-
-            # Retrieve word with good id
-            if args.ocr_engine == "lace":
-                ocr_word = file_management.Segment.from_ocr(args,
-                                                            ocr.source.find_all("html:span", {"id": good_id})[0],
-                                                            "ocr")
-            else: # TODO change this to not reloop over words
-                for word in ocr.words:
-                    word = file_management.Segment.from_ocr(args, word, "ocr")
-                    if word.id == good_id:
-                        ocr_word = word
-
-
-            # Compute edit distance
+            # Compute and record distance and edit operation
             distance = Levenshtein.distance(ocr_word.content, gt_word.content)
             editops = Levenshtein.editops(ocr_word.content, gt_word.content)
+            editops_record = evaluator.utils.record_editops(gt_word, ocr_word, editops, editops_record)
+            error_counts = evaluator.utils.actualize_error_counts(error_counts, gt_word, distance)
 
-            for editop in editops:
-                if editop[0] == "delete":
-                    error_traceback.append("delete " + ocr_word.content[editop[1]])
-                elif editop[0] == "insert":
-                    error_traceback.append("insert " + gt_word.content[editop[2]])
-                else:
-                    error_traceback.append(
-                        "{} {} -> {}".format(editop[0], ocr_word.content[int(editop[1])], gt_word.content[int(editop[2])]))
+            # Actualize soup and write comparison html file
+            soup = evaluator.utils.insert_text(soup, image, gt_word, True, distance)
+            soup = evaluator.utils.insert_text(soup, image, ocr_word, False, distance)
+            image.copy = evaluator.utils.draw_rectangle(image.copy, gt_word, (0,255,0), 4)
+            image.copy = evaluator.utils.draw_rectangle(image.copy, ocr_word, (0, 0, 255), 2)
 
-            # Register counts at global- and word_zone-level
-            for key in ["global", word_zone]:
-                error_counts[key]["chars"] += len(gt_word.content)
-                error_counts[key]["distance"] += distance
-                error_counts[key]["words"] += 1
-                if distance > 0:
-                    error_counts[key]["false_words"] += 1
+        # Write final html-file
+        with open(os.path.join(args.OUTPUT_DIR, gt_filename+".html"), "w") as html_file:
+            html_file.write(str(soup))
 
-            # Actualize and write soup
-            soup = evaluator.utils.insert_text(soup, gt_word, True, distance)
-            soup = evaluator.utils.insert_text(soup, ocr_word, False, distance)
-            with open(os.path.join(args.OUTPUT_DIR, image.filename[:-3] + "html"), "w") as html_file:
-                html_file.write(str(soup))
+        # Write boxes images
+        cv2.imwrite(os.path.join(args.OUTPUT_DIR,gt_filename+".png"), image.copy)
+
 
 
 # Compute CER and WER
 cer = {}
 wer = {}
-for zonetype in error_counts.keys():
+for zone_type in error_counts.keys():
     try:
-        cer[zonetype] = error_counts[zonetype]["distance"] / error_counts[zonetype]["chars"]
+        cer[zone_type] = error_counts[zone_type]["distance"] / error_counts[zone_type]["chars"]
     except ZeroDivisionError:
-        cer[zonetype] = 0
+        cer[zone_type] = 0
 
     try:
-        wer[zonetype] = error_counts[zonetype]["false_words"] / error_counts[zonetype]["words"]
+        wer[zone_type] = error_counts[zone_type]["false_words"] / error_counts[zone_type]["words"]
     except ZeroDivisionError:
-        wer[zonetype] = 0
+        wer[zone_type] = 0
 
-# Histogramm of error traceback
 
-error_traceback = {op: error_traceback.count(op) for op in error_traceback}
-error_traceback = {k: v for k, v in sorted(error_traceback.items(), key=lambda item: item[1], reverse=True)}
+editops_record = {op: editops_record.count(op) for op in editops_record}
+editops_record = {k: v for k, v in sorted(editops_record.items(), key=lambda item: item[1], reverse=True)}
 
 # Write custom results.tsv
-with open(os.path.join(args.OUTPUT_DIR, "results.tsv"), 'w') as csv_file:
+with open(os.path.join(args.OUTPUT_DIR, "results_{}.tsv".format(args.ocr_engine)), 'w') as csv_file:
     spamwriter = csv.writer(csv_file, delimiter='\t',
                             quotechar='"')
     spamwriter.writerow(["global_cer", "global_wer",
@@ -168,13 +107,9 @@ with open(os.path.join(args.OUTPUT_DIR, "results.tsv"), 'w') as csv_file:
                          cer["no_zone"], wer["no_zone"]])
 
 # Write custom editops_traceback
-with open(os.path.join(args.OUTPUT_DIR, "error_traceback.tsv"), 'w') as csv_file:
+with open(os.path.join(args.OUTPUT_DIR, "editops_record_{}.tsv".format(args.ocr_engine)), 'w') as csv_file:
     spamwriter = csv.writer(csv_file, delimiter='\t',
                             quotechar='"')
-    for k, v in error_traceback.items():
+    for k, v in editops_record.items():
         spamwriter.writerow([k, v])
 
-# %%
-
-
-#%%
