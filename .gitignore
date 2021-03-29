@@ -19,6 +19,5 @@ evaluator/outputs/
 evaluator/lace_boxes_drawer.py
 evaluator/ocrd_boxes_drawer.py
 evaluator/ocrd_implementation.py
-evaluator/ocrd_implementation.py.py
 
 
