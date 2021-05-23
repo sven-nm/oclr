@@ -4,8 +4,7 @@
 
 **Regional** means that both CER and WER can be assessed region per region (e.g. primary text, commentary, footnotes....).
 
-**Coordinates-based** means that evaluation does not process documents in a linear manner, which is prone to alignement 
-error when document layouts are complex. Instead, `evaluator` matches overlapping segments (e.g. words) in groundtruth and ocr-data.
+**Coordinates-based** means that evaluation does not process documents in a linear manner, which is prone to alignement error when document layouts are complex. Instead, `evaluator` matches overlapping segments (e.g. words) in groundtruth and ocr-data.
 
 More formally, for each segment $s$ in groundtruth data, `evaluator`:
 - finds the segments $s'$ in ocr-data that overlaps the most with $s$. 
@@ -18,6 +17,7 @@ More formally, for each segment $s$ in groundtruth data, `evaluator`:
 - a .tsv file containing regional and global CER and WER scores
 - a .tsv file containing all edit operations, sorted by decreasing frequency
 - .html files recreating each analysed page and allowing the user to visually compare OCR with groundtruth. 
+- if argument `draw_rectangles` is passed, copies of the images with each segments outbounding rectangle.
 
 
 

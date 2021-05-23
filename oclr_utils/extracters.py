@@ -1,11 +1,10 @@
 """
 `extracters.py` stores all the function used to extract data from images, hocr, html or PAGE-xml formats.
 """
-
+import copy
 import os
 import numpy as np
 import cv2
-from oclr_utils import file_management
 from typing import List
 
 
@@ -40,7 +39,13 @@ def get_coords(args, segment, data_type):
 
     if args.ocr_engine == "ocrd" and data_type == "ocr":
         coords = segment.getElementsByTagName("pc:Coords")[0].getAttribute("points").split()
-        coords = [(int(coord.split(",")[0]), int(coord.split(",")[1])) for coord in coords]
+
+        # Deal with polygons (creates the minimal bounding rect of an ocrd-polygon).
+        x_coords = [int(coord.split(",")[0]) for coord in coords]
+        y_coords = [int(coord.split(",")[1]) for coord in coords]
+        coords = [(min(x_coords), min(y_coords)), (max(x_coords), min(y_coords)),
+                  (max(x_coords), max(y_coords)), (min(x_coords), max(y_coords)),]
+
 
     else :  # exception raised if lace segment
         coords = segment["title"].split()
@@ -66,7 +71,11 @@ def get_content(args, segment, data_type):
             0].firstChild.nodeValue
     else:
         try:
-            content = segment.contents[0]
+            # Not implemented yet # TODO
+            if args.evaluation_level == "line":
+                content = " ".join([element.contents[0] for element in segment.findChildren("html:span", recursive=False)])
+            elif args.evaluation_level == "word":
+                content = segment.contents[0]
         except IndexError:
             content = ""
 
@@ -74,18 +83,31 @@ def get_content(args, segment, data_type):
 
 
 
-def get_segment_zonetype(segment: "Segment", overlap_matrix: "ndarray") -> str:
+def get_segment_zonetype(args: "Argparse.ArgumentParser", segment: "Segment", overlap_matrix: "ndarray") -> str:
     """Get the zonetype of a segment ("commentary", "app_crit"...) by selecting the maximally overlap value.
 
     :return: The zone type ; "no_zone" if the segment does not belong to any zone.
     """
 
     array = overlap_matrix[0, segment.coords[0][1]:segment.coords[2][1], segment.coords[0][0]:segment.coords[2][0]]
-    uniques, counts = np.unique(array, return_counts=True)
-    zone_type = uniques[counts.argmax()]
-    zone_type = "no_zone" if zone_type == '' else zone_type
+    segment_zones = array.flatten().squeeze().tolist()
+    unique_segment_zones = []
 
-    return zone_type
+    # TODO [optimization] this could be optimized
+    zone_counts = {zone_type:0 for zone_type in args.zone_types}
+    for zone_type in args.zone_types:
+        for pixel_zones in segment_zones:
+            if zone_type in pixel_zones:
+                zone_counts[zone_type]+=1
+
+    for key in zone_counts.keys():
+        if zone_counts[key] >= 0.3*len(segment_zones):
+            unique_segment_zones.append(key)
+
+    if unique_segment_zones == []:
+        unique_segment_zones.append("no_zone")
+
+    return unique_segment_zones
 
 
 def get_corresponding_ocr_word(args: "ArgumentParser", gt_word: "Segment",
@@ -101,35 +123,68 @@ def get_corresponding_ocr_word(args: "ArgumentParser", gt_word: "Segment",
     uniques, counts = np.unique(array, return_counts=True)
     ocr_id = uniques[counts.argmax()]
 
+    ocr_word = None
+
     if ocr_id == "":
-        ocr_word = gt_word
+        ocr_word = copy.copy(gt_word)
         ocr_word.content = ""
 
     else:
         for word in ocr.words:
-            if word.id == ocr_id:
-                ocr_word = word
+            if word.id == ocr_id and not word.checked:
+                ocr_word = copy.copy(word)
+                word.checked = True
+
+        if ocr_word is None:
+            ocr_word = copy.copy(gt_word)
+            ocr_word.content = ""
+
 
     return ocr_word
 
 
-def find_included_contours(coords: List[tuple], image: "Image") -> str:
-    """Finds the contours included in a segments surrounding box.
+def find_included_contours(coords: List[tuple], image: "Image", mode : str):
+    """Finds the contours included in a segment's surrounding box.
 
-    :return: The zone type ; "no_zone" if the segment does not belong to any zone.
+    :param mode: "height", "width“ or "height+width", determines how contours that are at the limit of the surrounding
+    box (and cut by it) should be treated :
+        - "height" : contours that would increase the height of the box are discarded
+        - "width" : contours that would increase the width of the box are discarded
+        - "height+width" : both are discarded
+        - None : no contour is discarded, box remains the same
+    :return: The contours included in the segment's surrounding box
     """
 
     array = image.overlap_matrix[3, coords[0][1]:coords[2][1], coords[0][0]:coords[2][0]]
     contours = [image.contours[unique] for unique in np.unique(array) if unique != -1]
 
     # Exludes contours that would increase the height of the surrounding box
-    contours_new = []
-    for contour in contours:
-        if (np.max(contour[:, :, 1:2]) <= coords[2][1]) and (
-                np.min(contour[:, :, 1:2]) >= coords[0][1]):
-            contours_new.append(contour)
+    if mode is not None:
+        contours_new = []
 
-    return contours_new
+        for contour in contours:
+            if mode == "height":
+                if (np.max(contour[:, :, 1:2]) <= coords[2][1]) and (
+                        np.min(contour[:, :, 1:2]) >= coords[0][1]):
+                    contours_new.append(contour)
+
+            elif mode == "width":
+                if (np.max(contour[:, :, 0:1]) <= coords[2][0]) and (
+                        np.min(contour[:, :, 0:1]) >= coords[0][0]):
+                    contours_new.append(contour)
+
+            elif mode == "height+width":
+                if ((np.max(contour[:, :, 1:2]) <= coords[2][1]) and \
+                    (np.min(contour[:, :, 1:2]) >= coords[0][1])) \
+                        and \
+                        ((np.max(contour[:, :, 0:1]) <= coords[2][0]) and (
+                        np.min(contour[:, :, 0:1]) >= coords[0][0])):
+                    contours_new.append(contour)
+
+        return contours_new
+
+    else:
+        return contours
 
 
 def get_contours(image_matrix: "ndarray") -> List["ndarray"]:

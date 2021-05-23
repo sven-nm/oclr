@@ -10,14 +10,17 @@
 .idea/
 
 # Others
+docs/
 output/
+
 annotation_helper/data/test_*
 annotation_helper/output/
 
 evaluator/data/
+evaluator/docs/
 evaluator/outputs/
 evaluator/lace_boxes_drawer.py
 evaluator/ocrd_boxes_drawer.py
-evaluator/ocrd_implementation.py
+
 
 

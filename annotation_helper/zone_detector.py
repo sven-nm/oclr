@@ -5,79 +5,62 @@ import pandas as pd
 import logging
 
 
-def detect_zones(args):
+def detect_zones(args: "ArgumentParser", filename: str, csv_dict: dict) -> dict:
 
-    """Automatically detects regions of interest for every image in `IMG_DIR, using a simple dilation process.
+    """Automatically detects regions of interest for every image in `IMG_DIR`, using a simple dilation process.
     Returns a `'key':[values]`-like dictionnary containing all the generated rectangles for all the images"""
 
-    csv_dict = {"filename": [],
-                "file_size": [],
-                "file_attributes": [],
-                "region_count": [],
-                "region_id": [],
-                "region_shape_attributes": [],
-                "region_attributes": []}
+    # Preparing image
+    image = cv2.imread(os.path.join(args.IMG_DIR, filename))
+    copy = image.copy()
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(src=gray, ksize=(31, 31), sigmaX=0)
+    ret, thresh1 = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
 
-    for filename in os.listdir(args.IMG_DIR):
-        if filename[-3:] in ["png", "jpg", "tif", "jp2"]:
-            logging.info("Processing image "+filename)
+    # Appplying dilation on the threshold image
+    rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (args.dilation_kernel_size, args.dilation_kernel_size))
+    dilation = cv2.dilate(thresh1, rect_kernel, iterations=args.dilation_iterations)
 
-            # Preparing image
-            image = cv2.imread(os.path.join(args.IMG_DIR, filename))
-            copy = image.copy()
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            blur = cv2.GaussianBlur(src=gray, ksize=(31, 31), sigmaX=0)
-            ret, thresh1 = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
+    # Finding contours
+    contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    contours = annotation_helper.utils.remove_artifacts(image, contours, args.artifacts_size_threshold)
 
-            # Appplying dilation on the threshold image
-            rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (args.dilation_kernel_size, args.dilation_kernel_size))
-            dilation = cv2.dilate(thresh1, rect_kernel, iterations=args.dilation_iterations)
+    # Finding dilation contours
+    dilation_contours, dilation_hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    dilation_contours = annotation_helper.utils.remove_artifacts(image, dilation_contours, args.artifacts_size_threshold)
 
-            # Finding contours
-            contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            contours = annotation_helper.utils.remove_artifacts(image, contours, args.artifacts_size_threshold)
+    # Get boundings rects of contours
+    contours_rectangles = annotation_helper.utils.get_bounding_rectangles(contours)
+    dilation_contours_rectangles = annotation_helper.utils.get_bounding_rectangles(dilation_contours)
 
-            # Finding dilation contours
-            dilation_contours, dilation_hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            dilation_contours = annotation_helper.utils.remove_artifacts(image, dilation_contours, args.artifacts_size_threshold)
+    dilation_contours_rectangles_shrinked = annotation_helper.utils.shrink_dilation_contours_rectangles(dilation_contours_rectangles,
+                                                                                           contours_rectangles)
 
-            # Get boundings rects of contours
-            contours_rectangles = annotation_helper.utils.get_bounding_rectangles(contours)
-            dilation_contours_rectangles = annotation_helper.utils.get_bounding_rectangles(dilation_contours)
+    for i, rectangle in enumerate(dilation_contours_rectangles_shrinked):
+        csv_dict["filename"].append(filename)
+        csv_dict["file_size"].append(os.stat(os.path.join(args.IMG_DIR, filename)).st_size)
+        csv_dict["file_attributes"].append("{}")
+        csv_dict["region_count"].append(len(dilation_contours_rectangles_shrinked))
+        csv_dict["region_id"].append(i)
+        csv_dict["region_shape_attributes"].append({"name": "rect",
+                                                    "x": rectangle[0, 0],
+                                                    "y": rectangle[0, 1],
+                                                    "width": rectangle[1, 0] - rectangle[0, 0],
+                                                    "height": rectangle[2, 1] - rectangle[0, 1]})
+        csv_dict["region_attributes"].append({"text": "undefined"})
 
-            dilation_contours_rectangles_shrinked = annotation_helper.utils.shrink_dilation_contours_rectangles(dilation_contours_rectangles,
-                                                                                                   contours_rectangles)
+    # Draws output rectangles
+    if args.draw_rectangles :
+        # for rectangle in dilation_contours_rectangles:
+        #     dilation_rectangle = cv2.rectangle(copy, (rectangle[0, 0], rectangle[0, 1]),
+        #                          (rectangle[2, 0], rectangle[2, 1]), (0, 0, 255), 4)
 
-            for i, rectangle in enumerate(dilation_contours_rectangles_shrinked):
-                csv_dict["filename"].append(filename)
-                csv_dict["file_size"].append(os.stat(os.path.join(args.IMG_DIR, filename)).st_size)
-                csv_dict["file_attributes"].append("{}")
-                csv_dict["region_count"].append(len(dilation_contours_rectangles_shrinked))
-                csv_dict["region_id"].append(i)
-                csv_dict["region_shape_attributes"].append({"name": "rect",
-                                                            "x": rectangle[0, 0],
-                                                            "y": rectangle[0, 1],
-                                                            "width": rectangle[1, 0] - rectangle[0, 0],
-                                                            "height": rectangle[2, 1] - rectangle[0, 1]})
-                csv_dict["region_attributes"].append({"text": "undefined"})
+        for rectangle in dilation_contours_rectangles_shrinked:
+            shrinked_rectangle = cv2.rectangle(copy, (rectangle[0, 0], rectangle[0, 1]),
+                                        (rectangle[2, 0], rectangle[2, 1]), (0, 0, 255), 4)
 
-            # Draws output rectangles
-            if args.draw_rectangles :
-                for rectangle in dilation_contours_rectangles:
-                    dilation_rectangle = cv2.rectangle(copy, (rectangle[0, 0], rectangle[0, 1]),
-                                         (rectangle[2, 0], rectangle[2, 1]), (0, 0, 255), 4)
+    cv2.imwrite(os.path.join(args.OUTPUT_DIR, filename), copy)
 
-                for rectangle in dilation_contours_rectangles_shrinked:
-                    shrinked_rectangle = cv2.rectangle(copy, (rectangle[0, 0], rectangle[0, 1]),
-                                                (rectangle[2, 0], rectangle[2, 1]), (0, 255, 0), 4)
-
-                cv2.imwrite(os.path.join(args.OUTPUT_DIR, filename), copy)
-
-    annotation_helper.utils.write_csv_manually("detected_annotations.csv", csv_dict, args)
-
-    print("{} zones were automatically detected".format(len(csv_dict["filename"])))
-
-    return csv_dict
 
 
 def merge_lace_and_detected_zones(detected_zones, lace_zones, args):

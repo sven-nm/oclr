@@ -10,7 +10,7 @@ def remove_artifacts(image, contours, artifacts_size_threshold):
     contours_denoised = []
     for contour in contours:
         _, _, w, h = cv2.boundingRect(contour)
-        if h + w > round(image.shape[0] * artifacts_size_threshold):
+        if (2*h + 2*w) > round(image.shape[0] * artifacts_size_threshold):
             contours_denoised.append(contour)
     return contours_denoised
 

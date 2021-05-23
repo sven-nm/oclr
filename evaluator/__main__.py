@@ -1,115 +1,236 @@
 import csv
+import json
 import os
 import Levenshtein
 import sys
+
 sys.path.append(os.getcwd())
 from oclr_utils import file_management, extracters
 from oclr_utils.cli import args
 import evaluator.utils
 import cv2
 
-
 # TODO : Update Logging
-# TODO : Update html overlapping
 # TODO : handle words that are in ocr but not in gt
-# TODO : add safe check
-# TODO : manage box sizes for ocrd
-# TODO : see if word as already been evaulated
-# TODO : see if overlap can be to another word
-# TODO : all correction as a safety check
+# TODO : retrieve mean edit edit distance per word
 
-# Pre-loop declarations
-analyzed_zonetypes = ["global", "commentary", "primary_text", "translation", "app_crit", "page_number", "title",
-                      "no_zone"]
-error_counts = {i: {j: 0 for j in ["chars", "distance", "words", "false_words"]} for i in analyzed_zonetypes}
-editops_record = []
-args.ocr_engine = "ocrd" if args.OCR_DIR.find("OCR-D") >= 0 else "lace"
+def main(args, general_results, via_project):
 
-for gt_filename in os.listdir(args.GROUNDTRUTH_DIR):  # GT-files LOOP
-
-    if gt_filename[-5:] == ".html":
-        print("Processing image " + gt_filename)
-        gt_filename = gt_filename[:-5]  # Removes the extension
-
-        # Import files
-        image = file_management.Image(args, gt_filename)
-        svg = file_management.ZonesMasks(args, gt_filename, image.image_format)
-        groundtruth = file_management.OcrObject(args, image, gt_filename, data_type="groundtruth")
-        ocr = file_management.OcrObject(args, image, gt_filename, data_type="ocr")
-
-        soup = evaluator.utils.initialize_soup(image)  # Initialize html output
-        image.overlap_matrix = evaluator.utils.actualize_overlap_matrix(args, image, svg, groundtruth, ocr)
-
-        for gt_word in groundtruth.words:
-
-            gt_word.zone_type = extracters.get_segment_zonetype(gt_word, image.overlap_matrix)
-            ocr_word = extracters.get_corresponding_ocr_word(args, gt_word, ocr, image.overlap_matrix)
-
-            # Compute and record distance and edit operation
-            distance = Levenshtein.distance(ocr_word.content, gt_word.content)
-            editops = Levenshtein.editops(ocr_word.content, gt_word.content)
-            editops_record = evaluator.utils.record_editops(gt_word, ocr_word, editops, editops_record)
-            error_counts = evaluator.utils.actualize_error_counts(error_counts, gt_word, distance)
-
-            # Actualize soup and write comparison html file
-            soup = evaluator.utils.insert_text(soup, image, gt_word, True, distance)
-            soup = evaluator.utils.insert_text(soup, image, ocr_word, False, distance)
-            image.copy = evaluator.utils.draw_rectangle(image.copy, gt_word, (0,255,0), 4)
-            image.copy = evaluator.utils.draw_rectangle(image.copy, ocr_word, (0, 0, 255), 2)
-
-        # Write final html-file
-        with open(os.path.join(args.OUTPUT_DIR, gt_filename+".html"), "w") as html_file:
-            html_file.write(str(soup))
-
-        # Write boxes images
-        cv2.imwrite(os.path.join(args.OUTPUT_DIR,gt_filename+".png"), image.copy)
+    # ==================================== PRELIMINARY AFFECTATIONS ========================================================
+    # Actualizing args
+    args.ocr_engine = "ocrd" if ("ocr-d" in args.OCR_DIR.lower() or "ocrd" in args.OCR_DIR.lower()) else "lace"
+    args.olr_annotation_type = "via" if args.via_project is not None else "lace"
+    args.OCR_PARDIR = os.path.join(args.OCR_DIR, os.pardir)
+    print("Processing " + args.OCR_PARDIR)
 
 
+    if args.olr_annotation_type == "lace":
+        args.zone_types = ["commentary", "primary_text", "translation", "app_crit", "page_number", "title", "no_zone"]
+    else:
+        args.zone_types = list(via_project["_via_attributes"]["region"]["text"]["options"].keys()) + ["no_zone"]
+        args.zone_types.remove("undefined")
 
-# Compute CER and WER
-cer = {}
-wer = {}
-for zone_type in error_counts.keys():
-    try:
-        cer[zone_type] = error_counts[zone_type]["distance"] / error_counts[zone_type]["chars"]
-    except ZeroDivisionError:
-        cer[zone_type] = 0
+    if args.PARENT_DIR is not None:
+        args.OUTPUT_DIR = os.path.join(args.OCR_PARDIR, "evaluation")
+        os.makedirs(args.OUTPUT_DIR, exist_ok=True)
 
-    try:
-        wer[zone_type] = error_counts[zone_type]["false_words"] / error_counts[zone_type]["words"]
-    except ZeroDivisionError:
-        wer[zone_type] = 0
+    # Pre-loop declarations
+    error_counts = {i: {j: 0 for j in ["gt_chars", "distance", "gt_words", "false_words", "greek_chars", "numbers"]} for i in
+                    ["global"] + args.zone_types}
+
+    error_counts["global"]["ocr_words"] = 0
+    editops_record = []
+
+    # ==================================== LOOP OVER FILES IN GROUNDTRUTH ==================================================
+    for gt_filename in os.listdir(args.GROUNDTRUTH_DIR):  # GT-files LOOP
+
+        if gt_filename[-5:] == ".html":
+
+            print("Evaluating file " + gt_filename)
+            gt_filename = gt_filename[:-5]  # Removes the extension
+
+            # Import image
+            image = file_management.Image(args, gt_filename)
+
+            # Import SVG or via .json
+            if args.via_project is not None:
+                zonemask = file_management.ZonesMasks.from_via_json(image, via_project)
+            else:
+                zonemask = file_management.ZonesMasks.from_lace_svg(args, image)
+
+            groundtruth = file_management.OcrObject(args, image, gt_filename, data_type="groundtruth")
+            ocr = file_management.OcrObject(args, image, gt_filename, data_type="ocr")
+
+            soup = evaluator.utils.initialize_soup(image)  # Initialize html output
+            image.overlap_matrix = evaluator.utils.actualize_overlap_matrix(args, image, zonemask, groundtruth, ocr)
+
+            # Loop over words in groundtruth
+            for gt_word in groundtruth.words:
+                gt_word.zone_type = extracters.get_segment_zonetype(args, gt_word, image.overlap_matrix)
+                ocr_word = extracters.get_corresponding_ocr_word(args, gt_word, ocr, image.overlap_matrix)
+
+                # Compute and record distance and edit operation
+                distance = Levenshtein.distance(ocr_word.content, gt_word.content)
+                editops = Levenshtein.editops(ocr_word.content, gt_word.content)
+                editops_record = evaluator.utils.record_editops(gt_word, ocr_word, editops, editops_record)
+                error_counts = evaluator.utils.actualize_error_counts(error_counts, gt_word, distance)
+
+                # Actualize comparison files
+                soup = evaluator.utils.insert_text(soup, image, gt_word, True, distance)
+                soup = evaluator.utils.insert_text(soup, image, ocr_word, False, distance)
+
+                # Draws word-boxes
+                if args.draw_rectangles:
+                    image.copy = evaluator.utils.draw_surrounding_rectangle(image.copy, gt_word, (0, 255, 0), 4)
+                    image.copy = evaluator.utils.draw_surrounding_rectangle(image.copy, ocr_word, (0, 0, 255), 2)
+
+            error_counts["global"]["ocr_words"] += len(ocr.words)
+            # Write final html-file
+            with open(os.path.join(args.OUTPUT_DIR, gt_filename + ".html"), "w") as html_file:
+                html_file.write(str(soup))
+
+            # Write boxes images
+            if args.draw_rectangles:
+                for zone in zonemask.zones:
+                    image.copy = evaluator.utils.draw_surrounding_rectangle(image.copy, zone, (0, 0, 255), 2)
+                    image.copy = evaluator.utils.draw_surrounding_rectangle(image.copy, zone, (0, 117, 117), 2, "raw")
+
+                cv2.imwrite(os.path.join(args.OUTPUT_DIR, gt_filename + ".png"), image.copy)
+
+    # ======================== COMPUTE METRICS : CER, WER AND MEAN EDIT-DISTANCE =====================================================
+    cer = {}
+    wer = {}
+    med = {}
+    for zone_type in error_counts.keys():
+
+        try:
+            cer[zone_type] = error_counts[zone_type]["distance"] / error_counts[zone_type]["gt_chars"]
+        except ZeroDivisionError:
+            cer[zone_type] = "NaN"
+
+        try:
+            wer[zone_type] = error_counts[zone_type]["false_words"] / error_counts[zone_type]["gt_words"]
+        except ZeroDivisionError:
+            wer[zone_type] = "NaN"
+
+        try:
+            med[zone_type] = error_counts[zone_type]["distance"] / error_counts[zone_type]["gt_words"]
+        except ZeroDivisionError:
+            med[zone_type] = "NaN"
 
 
-editops_record = {op: editops_record.count(op) for op in editops_record}
-editops_record = {k: v for k, v in sorted(editops_record.items(), key=lambda item: item[1], reverse=True)}
+    error_counts["global"]["precision"], error_counts["global"]["recall"], error_counts["global"][
+        "f1"] = evaluator.utils.compute_confusion_metrics(error_counts)
 
-# Write custom results.tsv
-with open(os.path.join(args.OUTPUT_DIR, "results_{}.tsv".format(args.ocr_engine)), 'w') as csv_file:
-    spamwriter = csv.writer(csv_file, delimiter='\t',
-                            quotechar='"')
-    spamwriter.writerow(["global_cer", "global_wer",
-                         "commentary_cer", "commentary_wer",
-                         "primary_text_cer", "primary_text_wer",
-                         "translation_cer", "translation_wer",
-                         "app_crit_cer", "app_crit_wer",
-                         "page_number_cer", "page_number_wer",
-                         "title_cer", "title_wer",
-                         "no_zone_cer", "no_zone_wer"])
+    # =================================== WRITE EDIT-OPERATIONS RECORD =====================================================
+    editops_record = {op: editops_record.count(op) for op in editops_record}
+    editops_record = {k: v for k, v in sorted(editops_record.items(), key=lambda item: item[1], reverse=True)}
 
-    spamwriter.writerow([cer["global"], wer["global"],
-                         cer["commentary"], wer["commentary"],
-                         cer["primary_text"], wer["primary_text"],
-                         cer["translation"], wer["translation"],
-                         cer["app_crit"], wer["app_crit"],
-                         cer["page_number"], wer["page_number"],
-                         cer["title"], wer["title"],
-                         cer["no_zone"], wer["no_zone"]])
+    with open(os.path.join(args.OUTPUT_DIR, "editops_record.tsv"), 'w') as csv_file:
+        spamwriter = csv.writer(csv_file, delimiter='\t', quotechar='"')
+        for k, v in editops_record.items():
+            spamwriter.writerow([k, v])
 
-# Write custom editops_traceback
-with open(os.path.join(args.OUTPUT_DIR, "editops_record_{}.tsv".format(args.ocr_engine)), 'w') as csv_file:
-    spamwriter = csv.writer(csv_file, delimiter='\t',
-                            quotechar='"')
-    for k, v in editops_record.items():
-        spamwriter.writerow([k, v])
+    # ======================================== WRITE RESULTS .TSV FILE =====================================================
+    with open(os.path.join(args.OUTPUT_DIR, "results.tsv"), 'w') as csv_file:
+        spamwriter = csv.writer(csv_file, delimiter='\t', quotechar='"')
 
+        header1 = []
+        header2 = []
+        counts = []
+        stats = []
+
+        for key in error_counts.keys():
+            header1.append(key)
+            header1.append(key)
+            header1.append(key)
+            header2.append("cer")
+            header2.append("wer")
+            header2.append("med")
+            counts.append(str(error_counts[key]["gt_chars"]))
+            counts.append(str(error_counts[key]["gt_words"]))
+            counts.append(str(error_counts[key]["gt_words"]))
+            stats.append(cer[key])
+            stats.append(wer[key])
+            stats.append(med[key])
+
+        for key in ["f1", "recall", "precision"]:
+            header1.insert(0, "global")
+            header2.insert(0, key)
+            counts.insert(0, "-")
+            stats.insert(0, error_counts["global"][key])
+
+        spamwriter.writerow(header1)
+        spamwriter.writerow(counts)
+        spamwriter.writerow(stats)
+
+        if args.PARENT_DIR is not None :
+            stats.insert(0, args.OCR_DIR.split("/")[-2])
+            stats.insert(0, args.PARENT_DIR.split("/")[-1])
+
+            if general_results == []:
+
+                general_results.append(["",""]+header1)
+                general_results.append(["",""]+header2)
+
+            general_results.append(stats)
+
+    # ======================================== WRITE COUNTS .TSV FILE =====================================================
+    with open(os.path.join(args.OUTPUT_DIR, "stats.tsv"), 'w') as csv_file:
+        spamwriter = csv.writer(csv_file, delimiter='\t', quotechar='"')
+
+        header1 = []
+        header2 = []
+        counts = []
+        subkeys = ["chars", "words", "greek_chars","greek_chars_%", "numbers"]
+
+        for key in error_counts.keys():
+            header1 += [key]*len(subkeys)
+            header2 += subkeys
+
+
+            counts.append(str(error_counts[key]["gt_chars"]))
+            counts.append(str(error_counts[key]["gt_words"]))
+            counts.append(str(error_counts[key]["greek_chars"]))
+            try:
+                counts.append(str(100 * error_counts[key]["greek_chars"] / error_counts[key]["gt_chars"]))
+            except ZeroDivisionError:
+                counts.append("NaN")
+            counts.append(str(error_counts[key]["numbers"]))
+
+        spamwriter.writerow(header1)
+        spamwriter.writerow(header2)
+        spamwriter.writerow(counts)
+
+
+# ======================================== WRITE GENERAL RESULTS AND RUN ===============================================
+
+if args.PARENT_DIR is not None:
+    args.PARENT_DIR_STORED = args.PARENT_DIR[:]
+
+    for commentary_name in ["campbell", "jebb", "lobeck", "schneidewin", "wecklein"]:
+    # for commentary_name in ["lobeck"]:
+        general_results = []
+        args.PARENT_DIR = os.path.join(args.PARENT_DIR_STORED, commentary_name)
+        args.IMG_DIR = os.path.join(args.PARENT_DIR, "ocr/evaluation/groundtruth/images")
+        args.GROUNDTRUTH_DIR = os.path.join(args.PARENT_DIR, "ocr/evaluation/groundtruth/html")
+        args.via_project = os.path.join(args.PARENT_DIR, "olr/via_project.json")
+        with open(args.via_project, "r") as file:
+            via_project = json.load(file)
+
+        for dir in os.scandir(os.path.join(args.PARENT_DIR, "ocr/ocrs")):
+            if dir.is_dir():
+                args.OCR_DIR = os.path.join(dir.path, "outputs")
+                main(args, general_results, via_project)
+
+
+        with open(os.path.join(args.PARENT_DIR, "ocr/evaluation/general_results.tsv"), 'w') as csv_file:
+            spamwriter = csv.writer(csv_file, delimiter='\t', quotechar='"')
+            for el in general_results:
+                spamwriter.writerow(el)
+
+
+else:
+    with open(args.via_project, "r") as file:
+        via_project = json.load(file)
+    main(args, None, via_project)

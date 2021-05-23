@@ -6,7 +6,7 @@ import logging
 
 
 # TODO : Actualize this with oclr_utils classes
-def convert_svg(args):
+def convert_svg(args: "argparse.ArgumentParser"):
     """Convert svg-files from lace into VIA2 readable csv-files.
     Returns a `'key':[values]`-like dictionnary containing all the imported rectangles for all the images"""
 

@@ -11,27 +11,33 @@ def general_args(parser: "ArgumentParser") -> "ArgumentParser":
     :return: augmented argparse parser.
     """
 
-
     parser.add_argument(
         "--IMG_DIR",
         default=None,
         type=str,
-        required=True,
+        required=False,
         help="Absolute path to the directory where the image-files are stored")
 
     parser.add_argument(
         "--SVG_DIR",
         default=None,
         type=str,
-        required=True,
-        help="Absolute path to the directory where the svg-files are stored")
+        required=False,
+        help="Absolute path to the directory where the svg-files are stored. Must be given if `--via_project` is not")
 
     parser.add_argument(
         "--OUTPUT_DIR",
         default=None,
         type=str,
-        required=True,
+        required=False,
         help="Absolute path to the directory in which outputs are to be stored")
+
+    parser.add_argument(
+        "--via_project",
+        default=None,
+        type=str,
+        required=False,
+        help="Absolute path to the .json via project. Must be given if `--SVG_DIR` is not.")
 
     return parser
 
@@ -47,15 +53,30 @@ def evaluator_args(parser: "ArgumentParser") -> "ArgumentParser":
         "--GROUNDTRUTH_DIR",
         default=None,
         type=str,
-        required=True,
+        required=False,
         help="Absolute path to the directory in which groundtruth-files are stored")
 
     parser.add_argument(
         "--OCR_DIR",
         default=None,
         type=str,
-        required=True,
+        required=False,
         help="Absolute path to the directory in which ocr-files are stored")
+
+    parser.add_argument(
+        "--evaluation_level",
+        default="word",
+        type=str,
+        required=False,
+        help="""The level at which evaluation should be performed ("line" or "word")""")
+
+    parser.add_argument(
+        "--PARENT_DIR",
+        default=None,
+        type=str,
+        required=False,
+        help="""If provided, all paths will be overwritten, all paths will be overwritten to test all ocr-outputs
+        in the current folder. Specific folder structure needed""")
 
     return parser
 
@@ -110,41 +131,26 @@ elif sys.argv[0] == "annotation_helper":
 # For local testing
 else:
     parser = evaluator_args(annotation_helper_args(general_args(parser)))
-    # For local repo/lace
-    # args = parser.parse_args(["--IMG_DIR", "/Users/sven/oclr/evaluator/data/images",
-    #                           "--SVG_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth/svg",
-    #                           "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs/lace_jebb_eval",
-    #                           "--GROUNDTRUTH_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth",
-    #                           "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/lace_ocr",
-    #                           "--dilation_kernel_size", "51",
-    #                           "--dilation_iterations", "1",
-    #                           "--artifacts_size_threshold", "0.01",
-    #                           "--draw_rectangles",
-    #                           "--merge_zones"
-    #                           ])
 
-    # # For local repo/ocrd
-    # args = parser.parse_args(["--IMG_DIR", "/Users/sven/oclr/evaluator/data/images",
-    #                           "--SVG_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth/svg",
-    #                           "--OUTPUT_DIR", "/Users/sven/oclr/evaluator/outputs/ocrd_jebb_eval",
-    #                           "--GROUNDTRUTH_DIR", "/Users/sven/oclr/evaluator/data/evaluation_groundtruth",
-    #                           "--OCR_DIR", "/Users/sven/oclr/evaluator/data/ocr/ocrd_ocr/OCR-D-OCR_word",
-    #                           "--dilation_kernel_size", "51",
-    #                           "--dilation_iterations", "1",
-    #                           "--artifacts_size_threshold", "0.01",
-    #                           "--draw_rectangles",
-    #                           "--merge_zones"
-    #                           ])
-
-    # For other repo
-    args = parser.parse_args(["--IMG_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/images/bsb10234118-images",
-                              "--SVG_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/evaluation/groundtruth/svg",
-                              "--OUTPUT_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/evaluation/output/ocrd",
-                              "--GROUNDTRUTH_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/evaluation/groundtruth",
-                              "--OCR_DIR", "/Users/sven/Google Drive/_AJAX/data/ocr_data/lobbeck/ocrd/OCR-D-OCR",
-                              "--dilation_kernel_size", "51",
-                              "--dilation_iterations", "1",
-                              "--artifacts_size_threshold", "0.01",
-                              "--draw_rectangles",
-                              "--merge_zones"
+    args = parser.parse_args(["--PARENT_DIR", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/",
+                              "--evaluation_level", "word",  # "line" level not implemented yet # TODO
+                              "--dilation_kernel_size", "27",
+                              "--dilation_iterations", "2",
+                              "--artifacts_size_threshold", "0.020",
+                              # "--draw_rectangles"
+                              # "--merge_zones"
                               ])
+
+    # args = parser.parse_args(["--OUTPUT_DIR", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/jebb/ocr/ocrs/lace_sophoclesplaysa05campgoog-2021-05-22-08-36-54-porson-with-sophocleseplaysa05campgoog-2021-05-21-23-05-50",
+    #                           "--IMG_DIR", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/jebb/ocr/evaluation/groundtruth/images",
+    #                           "--SVG_DIR", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/jebb/ocr/evaluation/groundtruth/svg",
+    #                           "--GROUNDTRUTH_DIR", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/jebb/ocr/evaluation/groundtruth/html",
+    #                           "--OCR_DIR", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/jebb/ocr/ocrs/lace_sophoclesplaysa05campgoog-2021-05-22-08-36-54-porson-with-sophocleseplaysa05campgoog-2021-05-21-23-05-50/outputs",
+    #                           "--via_project", "/Users/sven/Google Drive/_AJAX/AjaxMultiCommentary/data/commentary_data/jebb/olr/via_project.json",
+    #                           "--evaluation_level", "word", # "line" level not implemented yet
+    #                           "--dilation_kernel_size", "23",
+    #                           "--dilation_iterations", "2",
+    #                           "--artifacts_size_threshold", "0.020",
+    #                           "--draw_rectangles"
+    #                           "--merge_zones"
+    #                           ])
